@@ -1,89 +1,101 @@
-using System;
-using System.IO;
-using System.Linq;
+import java.util.Arrays;
 
-// --- DRY: Ортақ конфигурация ---
-public static class AppConfig
-{
-    public const string ConnectionString = "Server=myServer;Database=myDb;User Id=myUser;Password=myPass;";
+// --- 1. DRY: Ортақ конфигурация ---
+class AppConfig {
+    // Конфигурацияны бір жерде сақтау - болашақта өзгерту оңай
+    public static final String CONNECTION_STRING = "Server=myServer;Database=myDb;User Id=myUser;Password=myPass;";
 }
 
-// --- DRY: Параметрленген логика ---
-public class Logger
-{
-    public void Log(string message, string level = "INFO")
-    {
-        Console.WriteLine($"{level.ToUpper()}: {message}");
+// --- 2. DRY: Параметрленген әдіс ---
+class Logger {
+    // Үш бөлек әдістің орнына бір әмбебап әдіс (DRY)
+    public void log(String message, String level) {
+        System.out.println(level.toUpperCase() + ": " + message);
     }
 }
 
-public class DatabaseService
-{
-    public void Connect()
-    {
-        string connectionString = AppConfig.ConnectionString;
-        // Қосылу логикасы осында
+class DatabaseService {
+    public void connect() {
+        String conn = AppConfig.CONNECTION_STRING;
+        System.out.println("Базаға қосылуда: " + conn);
     }
 }
 
-public class LoggingService
-{
-    private readonly Logger _logger = new Logger();
-
-    public void LogToDb(string message)
-    {
-        string connectionString = AppConfig.ConnectionString;
-        _logger.Log(message, "DB_LOG");
+class LoggingService {
+    public void log(String message) {
+        String conn = AppConfig.CONNECTION_STRING;
+        System.out.println("Лог базаға жазылды: " + message);
     }
 }
 
-// --- KISS: Қарапайым және тиімді әдістер ---
-public class Calculator
-{
-    public int Divide(int a, int b)
-    {
-        // Exception-ды күтпей-ақ, алдын ала тексеру (KISS)
-        return b == 0 ? 0 : a / b;
-    }
+// --- 3. KISS: Қарапайымдылық және "Түзу" код ---
+class NumberProcessor {
+    // Guard Clauses қолдану: іштей салынудан (if ішінде if) құтылу
+    public void processNumbers(int[] numbers) {
+        // Егер массив бос болса, бірден тоқтатамыз
+        if (numbers == null || numbers.length == 0) return;
 
-    public void ProcessNumbers(int[] numbers)
-    {
-        // Guard Clause: артық іштей салынуды болдырмау
-        if (numbers == null || numbers.Length == 0) return;
-
-        foreach (var number in numbers)
-        {
-            if (number > 0) Console.WriteLine(number);
+        for (int number : numbers) {
+            if (number > 0) {
+                System.out.println("Өңделуде: " + number);
+            }
         }
     }
 
-    public void PrintPositiveNumbers(int[] numbers)
-    {
-        // Артық LINQ-сыз қарапайым цикл (KISS)
+    // Артық Stream/LINQ-сыз қарапайым цикл қолдану (KISS)
+    public void printPositiveNumbers(int[] numbers) {
         if (numbers == null) return;
 
-        foreach (var n in numbers)
-        {
-            if (n > 0) Console.WriteLine(n);
+        for (int n : numbers) {
+            if (n > 0) {
+                System.out.println(n);
+            }
         }
     }
-}
 
-// --- KISS: Артық функциялардан тазартылған кластар ---
-public class FileReader
-{
-    public string ReadFile(string filePath)
-    {
-        // Пайдаланушыны буфер өлшемімен мазаламаймыз
-        return File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
+    // Exception орнына қарапайым 'if' арқылы тексеру
+    public int divide(int a, int b) {
+        return (b == 0) ? 0 : a / b;
     }
 }
 
-public class ReportGenerator
-{
-    public void GenerateReport(string format)
-    {
-        // Әр форматқа жеке әдіс жазбаймыз (YAGNI принципі - "Сен оны пайдаланбайсың")
-        Console.WriteLine($"{format.ToUpper()} форматында есеп дайындалуда...");
+// --- 4. YAGNI: Артық функцияларды алып тастау ---
+class FileReader {
+    public String readFile(String filePath) {
+        // Пайдаланушыға керек емес буфер өлшемі сияқты баптауларды алып тастадық
+        return "Файл оқылды: " + filePath;
+    }
+}
+
+class ReportGenerator {
+    // Әр форматқа жеке әдіс жазбай, параметрмен басқару
+    public void generateReport(String format) {
+        System.out.println(format.toUpperCase() + " форматында есеп жасалуда...");
+    }
+}
+
+// --- Негізгі іске қосу класы ---
+public class Main {
+    public static void main(String[] args) {
+        // DRY тексеру
+        DatabaseService db = new DatabaseService();
+        db.connect();
+
+        Logger logger = new Logger();
+        logger.log("Жүйе іске қосылды", "info");
+        logger.log("Критикалық қате", "error");
+
+        // KISS тексеру
+        NumberProcessor processor = new NumberProcessor();
+        int[] data = { -1, 5, 0, 12 };
+        System.out.println("\nСандарды өңдеу:");
+        processor.processNumbers(data);
+
+        // Бөлу (қатесіз)
+        System.out.println("\nБөлу (10/0): " + processor.divide(10, 0));
+
+        // YAGNI тексеру
+        ReportGenerator report = new ReportGenerator();
+        report.generateReport("pdf");
     }
 }
