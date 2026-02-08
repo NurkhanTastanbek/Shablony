@@ -1,4 +1,4 @@
-class Order {
+        class Order {
     private String productName;
     private int quantity;
     private double price;
@@ -53,4 +53,4 @@ public class Main {
 
         System.out.println("\nТапсырыс сәтті аяқталды!");
     }
-}
+}    
