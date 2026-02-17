@@ -1,6 +1,6 @@
 import java.util.ArrayList;
 import java.util.List;
-
+// SRP жалғыз жауапкершілік
 class Order {
     private List<String> items = new ArrayList<>();
     private double totalAmount;
@@ -13,7 +13,8 @@ class Order {
     public double getTotalAmount() { return totalAmount; }
     public void setTotalAmount(double amount) { this.totalAmount = amount; }
 }
-
+// OCP ашық жабық приципі
+// DIP тәуелділікті инверсиялау
 interface IPayment {
     void processPayment(double amount);
 }
@@ -29,7 +30,7 @@ class PayPalPayment implements IPayment {
 class BankTransferPayment implements IPayment {
     public void processPayment(double amount) { System.out.println("Payment via Bank Transfer: " + amount); }
 }
-
+//LSP принципі
 interface IDelivery {
     void deliverOrder(Order order);
 }
@@ -45,7 +46,7 @@ class PostDelivery implements IDelivery {
 class PickUpPointDelivery implements IDelivery {
     public void deliverOrder(Order order) { System.out.println("Pick up from point..."); }
 }
-
+// ISP принципі интерфейсті бөлу
 interface INotification {
     void sendNotification(String message);
 }
