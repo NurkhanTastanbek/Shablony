@@ -1,95 +1,117 @@
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+
 interface IObserver {
-    void update(String currency, double rate);
+    String getName();
+    CompletableFuture<Void> updateAsync(String stockSymbol, double price);
 }
 
-interface ISubject {
-    void registerObserver(IObserver observer);
-    void removeObserver(IObserver observer);
-    void notifyObservers();
+interface IStockExchange {
+    void registerObserver(String stockSymbol, IObserver observer);
+    void removeObserver(String stockSymbol, IObserver observer);
+    CompletableFuture<Void> notifyObserversAsync(String stockSymbol, double price);
 }
 
-class CurrencyExchange implements ISubject {
-    private List<IObserver> observers = new ArrayList<>();
-    private String currency;
-    private double rate;
+class StockExchange implements IStockExchange {
+    private final Map<String, List<IObserver>> observers = new HashMap<>();
 
     @Override
-    public void registerObserver(IObserver observer) {
-        observers.add(observer);
-        System.out.println("[Жүйе]: Жаңа жазылушы қосылды.");
+    public void registerObserver(String stockSymbol, IObserver observer) {
+        observers.computeIfAbsent(stockSymbol, k -> new ArrayList<>()).add(observer);
+        System.out.println("[LOG]: " + observer.getName() + " registered for " + stockSymbol);
     }
 
     @Override
-    public void removeObserver(IObserver observer) {
-        observers.remove(observer);
-        System.out.println("[Жүйе]: Жазылушы өшірілді.");
-    }
-
-    @Override
-    public void notifyObservers() {
-        for (IObserver observer : observers) {
-            observer.update(currency, rate);
+    public void removeObserver(String stockSymbol, IObserver observer) {
+        if (observers.containsKey(stockSymbol)) {
+            observers.get(stockSymbol).remove(observer);
+            System.out.println("[LOG]: " + observer.getName() + " removed from " + stockSymbol);
         }
     }
-    public void setRate(String currency, double rate) {
-        this.currency = currency;
-        this.rate = rate;
-        System.out.println("\n[БИРЖА]: " + currency + " курсы өзгерді: " + rate + " KZT");
-        notifyObservers();
+
+    public CompletableFuture<Void> updatePriceAsync(String stockSymbol, double newPrice) {
+        System.out.printf("\n[MARKET]: %s -> %.2f\n", stockSymbol, newPrice);
+        return notifyObserversAsync(stockSymbol, newPrice);
     }
-}
 
-
-class Bank implements IObserver {
     @Override
-    public void update(String currency, double rate) {
-        System.out.println("[БАНК]: Ресми бағам жаңартылды: " + currency + " = " + rate);
+    public CompletableFuture<Void> notifyObserversAsync(String stockSymbol, double price) {
+        if (observers.containsKey(stockSymbol)) {
+            List<CompletableFuture<Void>> tasks = observers.get(stockSymbol).stream()
+                    .map(obs -> obs.updateAsync(stockSymbol, price))
+                    .collect(Collectors.toList());
+            
+            return CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0]));
+        }
+        return CompletableFuture.completedFuture(null);
     }
 }
 
 class Trader implements IObserver {
     private String name;
 
-    public Trader(String name) {
+    public Trader(String name) { this.name = name; }
+
+    @Override
+    public String getName() { return name; }
+
+    @Override
+    public CompletableFuture<Void> updateAsync(String stockSymbol, double price) {
+        System.out.printf("[Trader %s]: Received %s price: %.2f\n", name, stockSymbol, price);
+        return CompletableFuture.completedFuture(null);
+    }
+}
+
+class TradingRobot implements IObserver {
+    private String name;
+    private double threshold;
+    private boolean buyAbove;
+
+    public TradingRobot(String name, double threshold, boolean buyAbove) {
         this.name = name;
+        this.threshold = threshold;
+        this.buyAbove = buyAbove;
     }
 
     @Override
-    public void update(String currency, double rate) {
-        if (rate < 450.0) {
-            System.out.println("[ТРЕЙДЕР " + name + "]: Баға төмен! Сатып алуды бастаймын.");
-        } else {
-            System.out.println("[ТРЕЙДЕР " + name + "]: Баға жоғары, әлі де күтемін.");
+    public String getName() { return name; }
+
+    @Override
+    public CompletableFuture<Void> updateAsync(String stockSymbol, double price) {
+        if (buyAbove && price >= threshold) {
+            System.out.printf("[Robot %s]: ALERT! Price %.2f >= %.2f. ACTION: BUY %s\n", name, price, threshold, stockSymbol);
+        } else if (!buyAbove && price <= threshold) {
+            System.out.printf("[Robot %s]: ALERT! Price %.2f <= %.2f. ACTION: SELL %s\n", name, price, threshold, stockSymbol);
         }
+        return CompletableFuture.completedFuture(null);
     }
 }
-
-class MobileApp implements IObserver {
-    @Override
-    public void update(String currency, double rate) {
-        System.out.println("[APP]: Пуш-хабарлама: " + currency + " жаңа бағасы - " + rate);
-    }
-}
-
 
 public class Main {
-    public static void main(String[] args) {
-        CurrencyExchange exchange = new CurrencyExchange();
+    public static void main(String[] args) throws Exception {
+        StockExchange exchange = new StockExchange();
 
-        IObserver nationalBank = new Bank();
-        IObserver traderArman = new Trader("Арман");
-        IObserver halykApp = new MobileApp();
+        Trader john = new Trader("John");
+        TradingRobot bot1 = new TradingRobot("Alpha-Bot", 150.0, true);
+        TradingRobot bot2 = new TradingRobot("Omega-Bot", 100.0, false);
 
-        exchange.registerObserver(nationalBank);
-        exchange.registerObserver(traderArman);
-        exchange.registerObserver(halykApp);
+        exchange.registerObserver("AAPL", john);
+        exchange.registerObserver("AAPL", bot1);
+        exchange.registerObserver("TSLA", bot2);
 
-        exchange.setRate("USD", 445.5);
+        exchange.updatePriceAsync("AAPL", 140.0).get();
+        Thread.sleep(500);
 
-        exchange.setRate("USD", 455.0);
-        exchange.removeObserver(traderArman);
-        exchange.setRate("USD", 462.3);
+        exchange.updatePriceAsync("AAPL", 155.0).get();
+        Thread.sleep(500);
+
+        exchange.updatePriceAsync("TSLA", 90.0).get();
+        Thread.sleep(500);
+
+        exchange.removeObserver("AAPL", john);
+        exchange.updatePriceAsync("AAPL", 160.0).get();
+
+        System.out.println("\nSimulation completed.");
     }
 }
