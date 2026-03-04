@@ -1,120 +1,118 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
-public interface IObserver
-{
-    string Name { get; }
-    Task UpdateAsync(string stockSymbol, decimal price);
+interface IObserver {
+    String getName();
+    CompletableFuture<Void> updateAsync(String stockSymbol, double price);
 }
 
-public interface IStockExchange
-{
-    void RegisterObserver(string stockSymbol, IObserver observer);
-    void RemoveObserver(string stockSymbol, IObserver observer);
-    Task NotifyObserversAsync(string stockSymbol, decimal price);
+interface IStockExchange {
+    void registerObserver(String stockSymbol, IObserver observer);
+    void removeObserver(String stockSymbol, IObserver observer);
+    CompletableFuture<Void> notifyObserversAsync(String stockSymbol, double price);
 }
 
-public class StockExchange : IStockExchange
-{
-    private readonly Dictionary<string, List<IObserver>> _observers = new();
+class StockExchange implements IStockExchange {
+    private final Map<String, List<IObserver>> observers = new HashMap<>();
 
-    public void RegisterObserver(string stockSymbol, IObserver observer)
-    {
-        if (!_observers.ContainsKey(stockSymbol))
-            _observers[stockSymbol] = new List<IObserver>();
-        _observers[stockSymbol].Add(observer);
-        Console.WriteLine($"[LOG]: {observer.Name} registered for {stockSymbol}");
+    @Override
+    public void registerObserver(String stockSymbol, IObserver observer) {
+        observers.computeIfAbsent(stockSymbol, k -> new ArrayList<>()).add(observer);
+        System.out.println("[LOG]: " + observer.getName() + " registered for " + stockSymbol);
     }
 
-    public void RemoveObserver(string stockSymbol, IObserver observer)
-    {
-        if (_observers.ContainsKey(stockSymbol))
-        {
-            _observers[stockSymbol].Remove(observer);
-            Console.WriteLine($"[LOG]: {observer.Name} removed from {stockSymbol}");
+    @Override
+    public void removeObserver(String stockSymbol, IObserver observer) {
+        List<IObserver> list = observers.get(stockSymbol);
+        if (list != null) {
+            list.remove(observer);
+            System.out.println("[LOG]: " + observer.getName() + " removed from " + stockSymbol);
         }
     }
 
-    public async Task UpdatePriceAsync(string stockSymbol, decimal newPrice)
-    {
-        Console.WriteLine($"\n[MARKET]: {stockSymbol} -> {newPrice:C}");
-        await NotifyObserversAsync(stockSymbol, newPrice);
+    public CompletableFuture<Void> updatePriceAsync(String stockSymbol, double newPrice) {
+        System.out.printf("\n[MARKET]: %s -> %.2f USD\n", stockSymbol, newPrice);
+        return notifyObserversAsync(stockSymbol, newPrice);
     }
 
-    public async Task NotifyObserversAsync(string stockSymbol, decimal price)
-    {
-        if (_observers.ContainsKey(stockSymbol))
-        {
-            var tasks = _observers[stockSymbol].Select(obs => obs.UpdateAsync(stockSymbol, price));
-            await Task.WhenAll(tasks);
+    @Override
+    public CompletableFuture<Void> notifyObserversAsync(String stockSymbol, double price) {
+        List<IObserver> list = observers.get(stockSymbol);
+        if (list == null || list.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
         }
+
+        List<CompletableFuture<Void>> futures = list.stream()
+                .map(obs -> obs.updateAsync(stockSymbol, price))
+                .toList();
+
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
     }
 }
 
-public class Trader : IObserver
-{
-    public string Name { get; }
-    public Trader(string name) => Name = name;
+class Trader implements IObserver {
+    private final String name;
+    public Trader(String name) { this.name = name; }
 
-    public Task UpdateAsync(string stockSymbol, decimal price)
-    {
-        Console.WriteLine($"[Trader {Name}]: Received {stockSymbol} price: {price:C}");
-        return Task.CompletedTask;
+    @Override
+    public String getName() { return name; }
+
+    @Override
+    public CompletableFuture<Void> updateAsync(String stockSymbol, double price) {
+        System.out.printf("[Trader %s]: Received %s price: %.2f USD\n", name, stockSymbol, price);
+        return CompletableFuture.completedFuture(null);
     }
 }
 
-public class TradingRobot : IObserver
-{
-    public string Name { get; }
-    private decimal _threshold;
-    private bool _buyAbove;
+class TradingRobot implements IObserver {
+    private final String name;
+    private final double threshold;
+    private final boolean buyAbove;
 
-    public TradingRobot(string name, decimal threshold, bool buyAbove)
-    {
-        Name = name;
-        _threshold = threshold;
-        _buyAbove = buyAbove;
+    public TradingRobot(String name, double threshold, boolean buyAbove) {
+        this.name = name;
+        this.threshold = threshold;
+        this.buyAbove = buyAbove;
     }
 
-    public Task UpdateAsync(string stockSymbol, decimal price)
-    {
-        if (_buyAbove && price >= _threshold)
-            Console.WriteLine($"[Robot {Name}]: ALERT! Price {price:C} >= {_threshold}. ACTION: BUY {stockSymbol}");
-        else if (!_buyAbove && price <= _threshold)
-            Console.WriteLine($"[Robot {Name}]: ALERT! Price {price:C} <= {_threshold}. ACTION: SELL {stockSymbol}");
-        
-        return Task.CompletedTask;
+    @Override
+    public String getName() { return name; }
+
+    @Override
+    public CompletableFuture<Void> updateAsync(String stockSymbol, double price) {
+        if (buyAbove && price >= threshold) {
+            System.out.printf("[Robot %s]: ALERT! Price %.2f >= %.2f. ACTION: BUY %s\n", name, price, threshold, stockSymbol);
+        } else if (!buyAbove && price <= threshold) {
+            System.out.printf("[Robot %s]: ALERT! Price %.2f <= %.2f. ACTION: SELL %s\n", name, price, threshold, stockSymbol);
+        }
+        return CompletableFuture.completedFuture(null);
     }
 }
 
-class Program
-{
-    static async Task Main(string[] args)
-    {
+public class Main {
+    public static void main(String[] args) throws Exception {
         StockExchange exchange = new StockExchange();
 
         Trader john = new Trader("John");
-        TradingRobot bot1 = new TradingRobot("Alpha-Bot", 150.00m, true);
-        TradingRobot bot2 = new TradingRobot("Omega-Bot", 100.00m, false);
+        TradingRobot bot1 = new TradingRobot("Alpha-Bot", 150.00, true);
+        TradingRobot bot2 = new TradingRobot("Omega-Bot", 100.00, false);
 
-        exchange.RegisterObserver("AAPL", john);
-        exchange.RegisterObserver("AAPL", bot1);
-        exchange.RegisterObserver("TSLA", bot2);
+        exchange.registerObserver("AAPL", john);
+        exchange.registerObserver("AAPL", bot1);
+        exchange.registerObserver("TSLA", bot2);
 
-        await exchange.UpdatePriceAsync("AAPL", 140.00m);
-        await Task.Delay(500);
-        
-        await exchange.UpdatePriceAsync("AAPL", 155.00m);
-        await Task.Delay(500);
+        exchange.updatePriceAsync("AAPL", 140.00).join();
+        Thread.sleep(500);
 
-        await exchange.UpdatePriceAsync("TSLA", 90.00m);
-        await Task.Delay(500);
+        exchange.updatePriceAsync("AAPL", 155.00).join();
+        Thread.sleep(500);
 
-        exchange.RemoveObserver("AAPL", john);
-        await exchange.UpdatePriceAsync("AAPL", 160.00m);
+        exchange.updatePriceAsync("TSLA", 90.00).join();
+        Thread.sleep(500);
 
-        Console.WriteLine("\nSimulation completed.");
+        exchange.removeObserver("AAPL", john);
+        exchange.updatePriceAsync("AAPL", 160.00).join();
+
+        System.out.println("\nSimulation completed.");
     }
 }
